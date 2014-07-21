@@ -1,7 +1,5 @@
 package com.augmate.scany;
 
-import com.google.zxing.ResultPoint;
-
 import android.graphics.Point;
 import android.os.Handler;
 import android.os.Message;
@@ -22,8 +20,6 @@ public final class DebugVizHandler extends Handler {
 		switch (message.what) {
 
 		case R.id.submit_viz:
-			Log.i(TAG, "Decode succeeded");
-			
 			Point pt = (Point) message.obj;
 			mScanActivity.AddPoint(pt);
 			

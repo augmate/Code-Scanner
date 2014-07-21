@@ -1,7 +1,5 @@
 package com.augmate.scany;
 
-import java.io.IOException;
-
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -21,11 +19,10 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.*;
 import android.widget.TextView;
-import android.widget.Toast;
-
 import com.google.zxing.Result;
 import com.google.zxing.ResultPoint;
-import com.google.zxing.qrcode.QRCodeReader;
+
+import java.io.IOException;
 
 public class ScanActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback, MediaPlayer.OnCompletionListener
 {
@@ -72,7 +69,6 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     // end of SurfaceHolder.Callback
     
     DebugViz mDebugViz;
-    GestureDetector gestureDetector;
     
 	@Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,7 +82,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         
         mDebugViz = (DebugViz) findViewById(R.id.debug_view);
         
-        mSoundPool = new SoundPool(10, AudioManager.STREAM_MUSIC, 0);
+        mSoundPool = new SoundPool(5, AudioManager.STREAM_MUSIC, 0);
         mSoundPool.setOnLoadCompleteListener(new OnLoadCompleteListener() {
             @Override
             public void onLoadComplete(SoundPool soundPool, int sampleId, int status) {
@@ -99,31 +95,9 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 	Boolean mBeepLoaded = false;
 	int mBeepSoundId;
 	SoundPool mSoundPool;
-//	MediaPlayer mMediaPlayer;
-	
-    public void didScanBarcode(String barcode, String symbology) {
-        // Remove non-relevant characters that might be displayed as rectangles
-        // on some devices. Be aware that you normally do not need to do this.
-        // Only special GS1 code formats contain such characters.
-        String cleanedBarcode = "";
-        for (int i = 0 ; i < barcode.length(); i++) {
-            if (barcode.charAt(i) > 30) {
-                cleanedBarcode += barcode.charAt(i);
-            }
-        }
-        
-        Log.i(TAG, "Scan returned: " + cleanedBarcode);
-        
-        //Toast.makeText(this, symbology + ": " + cleanedBarcode, Toast.LENGTH_LONG).show();
-    }
-    
-    public void didManualSearch(String entry) {
-    	Toast.makeText(this, "User entered: " + entry, Toast.LENGTH_LONG).show();
-    }
-    
+
     @Override
     public void onBackPressed() {
-        //mBarcodePicker.stopScanning();
         finish();
     }	
 	
@@ -214,104 +188,107 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 		
         String deviceManufacturerName = params.get("exif-make");
         Log.d(TAG, "deviceManufacturerName = [" + deviceManufacturerName + "]");
-        
-        if(deviceManufacturerName.equals("Vuzix"))
-        {
-        	Log.d(TAG, "Optimizing for Vuzix");
-        
-	        // glass tweaks
-	        params.setAutoExposureLock(true);
-	        params.setAutoWhiteBalanceLock(true);
-	        params.setExposureCompensation(0);
-	        params.setVideoStabilization(true);
-	        
-	        ///?params.setFocusMode("FOCUS_MODE_MACRO");
-	        ///params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
-	        ///params.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED); // doesn't work
-	        //params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
 
-            //params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
-            //params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
-	        	        
-	        params.setPreviewFpsRange(27000, 27000);
-	        ///params.set("saturation", "70");
-	        params.set("iso", "800");
-	        params.set("scene-mode", "barcode");
-	        ///params.set("mode", "high-quality");
-	        
-	        ///params.set("whitebalance", "shade");
-	        ///params.set("manual-exposure", "1");
-	        ///params.set("exposure", "1");
-	        
-	        //params.set("focus-mode", "on");
-	        
-	        // vuzix tweaks
-	        params.setPreviewSize(camera_width, camera_height);
-        } else if(deviceManufacturerName.equals("Epson"))
-        {
-        	Log.d(TAG, "Optimizing for Epson Moverio");
-        
-	        params.set("auto-exposure-lock", "false");
-	        params.set("manual-exposure", 0);
-	        params.set("contrast", 80);
-	        params.set("iso-mode-values", 100);
-	        params.set("zoom", 2);
-	        params.set("scene-mode-values", "barcode");
-        } else if(deviceManufacturerName.equals("Google"))
-        {
-        	Log.d(TAG, "Optimizing for Google Glass");
-        
-	        //params.set("exposure", 1);
-        	//params.setExposureCompensation(1);
-	        //params.set("contrast", 80);
-	        params.set("iso", 800);
-	        //params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_FLUORESCENT);
-	        //params.set("zoom", 18);
-	        //params.set("scene-mode-values", "barcode");
-	        //params.set("video-stabilization", 0);
-	        params.setAutoWhiteBalanceLock(true);
-	        //params.setAutoExposureLock(true);
-	        //params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
-	        
-	        params.setPreviewFormat(ImageFormat.NV21);
-	        params.setPreviewFpsRange(30000, 30000);
-	        params.setPreviewSize(camera_width, camera_height);
-        } else if(deviceManufacturerName.equals("Emulator")) {
-    		Log.d(TAG, "Emulator run");
-        	
-        	params.setAutoExposureLock(false);
-	        params.setAutoWhiteBalanceLock(false);
-	        
-        	params.set("manual-exposure", 0);
-        	params.set("contrast", 80);
-	        //params.set("iso-mode-values", 100);
-	        params.set("zoom", 10);
-	        //params.set("scene-mode-values", "barcode");
-	        params.set("video-stabilization", 80);
-	        params.set("whitebalance", "warm-fluorescent");
-        	
-        	params.setPreviewFormat(ImageFormat.NV21);
-	        params.setPreviewFpsRange(30000, 30000);
-	        params.setPreviewSize(camera_width, camera_height);
-        	
-        } else {
-        	Log.d(TAG, "Unrecognized run");
-        	
+        switch (deviceManufacturerName) {
+            case "Vuzix":
+                Log.d(TAG, "Optimizing for Vuzix");
+
+                // glass tweaks
+                params.setAutoExposureLock(true);
+                params.setAutoWhiteBalanceLock(true);
+                params.setExposureCompensation(0);
+                params.setVideoStabilization(true);
+
+                ///?params.setFocusMode("FOCUS_MODE_MACRO");
+                ///params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
+                ///params.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED); // doesn't work
+                //params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
+
+                //params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
+                //params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
+
+                params.setPreviewFpsRange(27000, 27000);
+                ///params.set("saturation", "70");
+                params.set("iso", "800");
+                params.set("scene-mode", "barcode");
+                ///params.set("mode", "high-quality");
+
+                ///params.set("whitebalance", "shade");
+                ///params.set("manual-exposure", "1");
+                ///params.set("exposure", "1");
+
+                //params.set("focus-mode", "on");
+
+                // vuzix tweaks
+                params.setPreviewSize(camera_width, camera_height);
+                break;
+            case "Epson":
+                Log.d(TAG, "Optimizing for Epson Moverio");
+
+                params.set("auto-exposure-lock", "false");
+                params.set("manual-exposure", 0);
+                params.set("contrast", 80);
+                params.set("iso-mode-values", 100);
+                params.set("zoom", 2);
+                params.set("scene-mode-values", "barcode");
+                break;
+            case "Google":
+                Log.d(TAG, "Optimizing for Google Glass");
+
+                //params.set("manual-exposure", );
+                //params.set("mode", "high-performance");
+                //params.setExposureCompensation(-3);
+                params.set("iso", 800);
+                params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_DAYLIGHT);
+                params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
+                //params.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
+                params.setAutoWhiteBalanceLock(true);
+                //params.setAutoExposureLock(true);
+                params.setRecordingHint(true);
+                params.setVideoStabilization(true);
+
+                params.setPreviewFormat(ImageFormat.NV21);
+                params.setPreviewFpsRange(30000, 30000);
+                params.setPreviewSize(camera_width, camera_height);
+                break;
+            case "Emulator":
+                Log.d(TAG, "Emulator run");
+
+                params.setAutoExposureLock(false);
+                params.setAutoWhiteBalanceLock(false);
+
+                params.set("manual-exposure", 0);
+                params.set("contrast", 80);
+                //params.set("iso-mode-values", 100);
+                params.set("zoom", 10);
+                //params.set("scene-mode-values", "barcode");
+                params.set("video-stabilization", 80);
+                params.set("whitebalance", "warm-fluorescent");
+
+                params.setPreviewFormat(ImageFormat.NV21);
+                params.setPreviewFpsRange(30000, 30000);
+                params.setPreviewSize(camera_width, camera_height);
+
+                break;
+            default:
+                Log.d(TAG, "Unrecognized run");
+
 //        	params.setAutoExposureLock(false);
 //	        params.setAutoWhiteBalanceLock(false);
-//	        
-        	params.set("manual-exposure", 0);
-        	params.set("contrast", 80);
+//
+                params.set("manual-exposure", 0);
+                params.set("contrast", 80);
 //	        //params.set("iso-mode-values", 100);
-	        params.set("zoom", 5);
+                params.set("zoom", 5);
 //	        //params.set("scene-mode-values", "barcode");
 //	        params.set("video-stabilization", 80);
 //	        params.set("whitebalance", "warm-fluorescent");
-//        	
+//
 //        	params.setPreviewFormat(ImageFormat.NV21);
-        	
-	        params.setPreviewFpsRange(20000, 20000);
-	        params.setPreviewSize(camera_width, camera_height);
+
+                params.setPreviewFpsRange(20000, 20000);
+                params.setPreviewSize(camera_width, camera_height);
+                break;
         }
         
         // 10-30 fps
@@ -385,7 +362,6 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 	
 	@Override
     protected void onResume() {
-		//mBarcodePicker.startScanning();
         super.onResume();
         
         Log.d(TAG, "Resuming");
@@ -407,8 +383,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 	
 	@Override
     protected void onPause() {
-	
-		//mBarcodePicker.stopScanning();
+
 		Log.d(TAG, "Pausing..");
 		
 		mPaused = true;
@@ -441,12 +416,9 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 	
 	@Override
     protected void onDestroy() {
-		Log.d(TAG, "Destroying..");
-
+		Log.d(TAG, "Destroying");
         super.onDestroy();
     }
-	
-	QRCodeReader mReaderQRCode;
 	
 	Boolean mPaused = false;
 	
@@ -454,7 +426,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     @Override
     public void onPreviewFrame(byte[] bytes, Camera camera) {
     	
-    	//Log.d(TAG, "onPreviewFrame()");
+    	//Log.d(TAG, "onPreviewFrame(); mReadyForMore = " + mReadyForMore);
     	
     	if(mHandler == null || mPaused)
     		return;
@@ -471,11 +443,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     Boolean mReadyForMore = true;
     
     public void requestFrame() {
-    	
-    	long start = SystemClock.elapsedRealtime();
-    	long time_since_last_frame = start - mLastFrame;
-    	mLastFrame = start;
-    	
+        mLastFrame = SystemClock.elapsedRealtime();
     	//Log.d(TAG, "Frame-request delta: " + time_since_last_frame + " ms");
     	mReadyForMore = true;
     }
@@ -487,8 +455,8 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     public void onQRCodeDecoded(Result rawResult) {
     	if (rawResult != null)
     	{
-    		//if(mBeepLoaded)
-    		//	mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
+    		if(mBeepLoaded)
+    			mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
     		
     		ResultPoint[] pts = rawResult.getResultPoints();
     		

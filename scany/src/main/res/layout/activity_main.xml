@@ -22,7 +22,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|left"
-        android:text="20140424 build 0045"
+        android:text="20140721"
         android:textAppearance="?android:attr/textAppearanceSmall" />
 
     <TextView

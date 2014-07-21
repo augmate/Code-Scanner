@@ -1,18 +1,6 @@
-/*
- * Copyright (C) 2010 ZXing authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+// based heavily on ZXing's capture activity
+// still using their own color-space conversion, binarizer, and qr-code detector and parser
+// should try a c++ qr-code detector
 
 package com.augmate.scany;
 
@@ -94,7 +82,7 @@ final class ScanThreadHandler extends Handler {
 		Handler targetHandler = mScanActivity.getHandler();
 
 		if (rawResult != null) {
-			Log.i(TAG, "QR-decode took " + (end - start) + " ms (time since last frame = " + time_since_last_frame + " ms) (conversion = " + (conversion - start) + " ms)");
+			Log.i(TAG, "QR-decode succeeded (!) in " + (end - start) + " ms (last frame = " + time_since_last_frame + " ms) (conversion = " + (conversion - start) + " ms)");
 
 			// tell scan-activity we got a decoded image
 			if(targetHandler != null) {
@@ -105,7 +93,7 @@ final class ScanThreadHandler extends Handler {
 		else
 		{
 			// nothing decoded from image, request another
-			//Log.d(TAG, "Spent " + (end - start) + " ms and found nothing  (time since last frame = "+time_since_last_frame+" ms)");
+			Log.d(TAG, "QR-decode failed in " + (end - start) + " ms (last frame = "+time_since_last_frame+" ms)");
 			
 			if(targetHandler != null) {
 				Message msg = Message.obtain(targetHandler, R.id.decode_failed);
