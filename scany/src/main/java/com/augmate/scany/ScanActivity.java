@@ -235,7 +235,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
             case "Google":
                 Log.d(TAG, "Optimizing for Google Glass");
 
-                params.set("manual-exposure", 5);
+                //params.set("manual-exposure", 2);
                 //params.set("mode", "high-performance");
                 //params.setExposureCompensation(50);
                 params.set("iso", 800);
@@ -243,11 +243,11 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
                 params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
                 //params.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
                 params.setAutoWhiteBalanceLock(true);
-                params.setRecordingHint(true);
-                params.setVideoStabilization(true);
+                //params.setRecordingHint(true);
+                //params.setVideoStabilization(true);
 
                 params.setPreviewFormat(ImageFormat.NV21);
-                params.setPreviewFpsRange(25000, 30000);
+                params.setPreviewFpsRange(30000, 30000);
                 params.setPreviewSize(camera_width, camera_height);
                 break;
             case "Emulator":
@@ -272,18 +272,9 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
             default:
                 Log.d(TAG, "Unrecognized run");
 
-//        	params.setAutoExposureLock(false);
-//	        params.setAutoWhiteBalanceLock(false);
-//
                 params.set("manual-exposure", 0);
                 params.set("contrast", 80);
-//	        //params.set("iso-mode-values", 100);
                 params.set("zoom", 5);
-//	        //params.set("scene-mode-values", "barcode");
-//	        params.set("video-stabilization", 80);
-//	        params.set("whitebalance", "warm-fluorescent");
-//
-//        	params.setPreviewFormat(ImageFormat.NV21);
 
                 params.setPreviewFpsRange(20000, 20000);
                 params.setPreviewSize(camera_width, camera_height);
@@ -351,7 +342,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         
         // start capture
         mCamera.startPreview();
-        mCamera.startSmoothZoom(15);
+        mCamera.startSmoothZoom(14);
 
         Log.d(TAG, "Starting preview.. Done");
 	}
@@ -454,8 +445,8 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     public void onQRCodeDecoded(Result rawResult) {
     	if (rawResult != null)
     	{
-    		//if(mBeepLoaded)
-    		//	mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
+    		if(mBeepLoaded)
+    			mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
     		
     		ResultPoint[] pts = rawResult.getResultPoints();
     		
