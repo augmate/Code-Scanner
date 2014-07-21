@@ -235,20 +235,19 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
             case "Google":
                 Log.d(TAG, "Optimizing for Google Glass");
 
-                //params.set("manual-exposure", );
+                params.set("manual-exposure", 5);
                 //params.set("mode", "high-performance");
-                //params.setExposureCompensation(-3);
+                //params.setExposureCompensation(50);
                 params.set("iso", 800);
-                params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_DAYLIGHT);
+                //params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
                 params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
                 //params.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
                 params.setAutoWhiteBalanceLock(true);
-                //params.setAutoExposureLock(true);
                 params.setRecordingHint(true);
                 params.setVideoStabilization(true);
 
                 params.setPreviewFormat(ImageFormat.NV21);
-                params.setPreviewFpsRange(30000, 30000);
+                params.setPreviewFpsRange(25000, 30000);
                 params.setPreviewSize(camera_width, camera_height);
                 break;
             case "Emulator":
@@ -455,8 +454,8 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     public void onQRCodeDecoded(Result rawResult) {
     	if (rawResult != null)
     	{
-    		if(mBeepLoaded)
-    			mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
+    		//if(mBeepLoaded)
+    		//	mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
     		
     		ResultPoint[] pts = rawResult.getResultPoints();
     		

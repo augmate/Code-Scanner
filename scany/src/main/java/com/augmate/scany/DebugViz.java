@@ -60,14 +60,14 @@ public class DebugViz extends View {
         if(_PaintColor == null)
         {
         	_PaintColor = new Paint();
-        	_PaintColor.setColor(0xff1abc9c);
+        	_PaintColor.setColor(0xaa1abc9c);
         	_PaintColor.setStrokeWidth(25.0f);
         }
         
         for (Point point : pts)
         {
         	//Log.i(TAG, "drawing point: " + ((float)point.x * scaleX) + "," + ((float)point.y * scaleY));
-        	canvas.drawPoint((float)point.x * scaleX, (float)point.y * scaleY, _PaintColor);
+        	canvas.drawCircle((float)point.x * scaleX, (float)point.y * scaleY, 25.0f, _PaintColor);
 		}
         
         postInvalidate();
