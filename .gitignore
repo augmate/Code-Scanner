@@ -2,3 +2,12 @@
 /local.properties
 /.idea/workspace.xml
 .DS_Store
+/build/dex-cache
+/.idea/codeStyleSettings.xml
+/.idea/dictionaries/Aleksandr.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/libraries/appcompat_v7_19_1_0.xml
+/.idea/libraries/core_3_0_1.xml
+/.idea/libraries/support_v4_19_1_0.xml
+/build

@@ -17,33 +17,49 @@ import android.os.Message;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
-import android.view.*;
+import android.view.Display;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.view.WindowManager;
 import android.widget.TextView;
 import com.google.zxing.Result;
 import com.google.zxing.ResultPoint;
 
 import java.io.IOException;
 
-public class ScanActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback, MediaPlayer.OnCompletionListener
-{
-	private static final String TAG = "Activity";
-	
-	Camera mCamera;
-	Boolean mHasSurface = false;
-	byte[] mFrameBuffer;
-	byte[] mDebugBuffer;
-	Bitmap mDebugBitmap;
-	Canvas mDebugCanvas;
-	
-	ScanActivityHandler mHandler;
-	
-	public Handler getHandler() {
-		return mHandler;
-	}
+public class ScanActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback, MediaPlayer.OnCompletionListener {
+    private static final String TAG = "Activity";
 
-	// start of SurfaceHolder.Callback
-	
-	@Override
+    Camera mCamera;
+    Boolean mHasSurface = false;
+    byte[] mFrameBuffer;
+    byte[] mDebugBuffer;
+    Bitmap mDebugBitmap;
+    Canvas mDebugCanvas;
+
+    ScanActivityHandler mHandler;
+    DebugViz mDebugViz;
+
+    // start of SurfaceHolder.Callback
+    Boolean mBeepLoaded = false;
+    int mBeepSoundId;
+    SoundPool mSoundPool;
+
+    // end of SurfaceHolder.Callback
+    int camera_width = 1280;
+    int camera_height = 720;
+    float mScaleWidth = 1;
+    float mScaleHeight = 1;
+    Boolean mPaused = false;
+    long mLastFrame;
+    Boolean mReadyForMore = true;
+    int mDetectCount = 0;
+
+    public Handler getHandler() {
+        return mHandler;
+    }
+
+    @Override
     public void surfaceCreated(SurfaceHolder holder) {
         if (holder == null) {
             Log.e(TAG, "*** WARNING *** surfaceCreated() gave us a null surface!");
@@ -65,78 +81,71 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
 
     }
-    
-    // end of SurfaceHolder.Callback
-    
-    DebugViz mDebugViz;
-    
-	@Override
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.d(TAG, "Starting.. v1");
 
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        
+
         setContentView(R.layout.activity_main);
-        
+
         mDebugViz = (DebugViz) findViewById(R.id.debug_view);
-        
+
         mSoundPool = new SoundPool(5, AudioManager.STREAM_MUSIC, 0);
         mSoundPool.setOnLoadCompleteListener(new OnLoadCompleteListener() {
             @Override
             public void onLoadComplete(SoundPool soundPool, int sampleId, int status) {
-            	mBeepLoaded = true;
+                mBeepLoaded = true;
             }
-          });
+        });
         mBeepSoundId = mSoundPool.load(this, R.raw.beep2, 1);
     }
-	
-	Boolean mBeepLoaded = false;
-	int mBeepSoundId;
-	SoundPool mSoundPool;
 
     @Override
     public void onBackPressed() {
         finish();
-    }	
-	
-	int camera_width = 640;
-	int camera_height = 360;
-	
-	protected void initCamera(SurfaceHolder surfaceHolder) {
-		
-		// should only be here if we have a preview surface
-		if (surfaceHolder == null) {
+    }
+
+    protected void initCamera(SurfaceHolder surfaceHolder) {
+
+        // should only be here if we have a preview surface
+        if (surfaceHolder == null) {
             throw new IllegalStateException("Cannot initialize Camera without a valid SurfaceHolder");
         }
-		
-		if(mCamera == null) {
-			Log.d(TAG, "Initializing Camera..");
-			
-			int numCameras = Camera.getNumberOfCameras();
-			CameraInfo cameraInfo = new CameraInfo();
-			for(int i = 0; i < numCameras; i ++) {
-				Camera.getCameraInfo(i, cameraInfo);
-				Log.d(TAG, String.format("Camera %d facing=%d orientation=%d", i, cameraInfo.facing, cameraInfo.orientation));
-			}
-			
-			try {
-				mCamera = Camera.open(0);
-				mCamera.setPreviewDisplay(surfaceHolder);
+
+        Display display = getWindowManager().getDefaultDisplay();
+        //Display display = ((WindowManager)getSystemService(WINDOW_SERVICE)).getDefaultDisplay();
+        Log.d(TAG, "Display rotation: " + display.getRotation());
+
+        if (mCamera == null) {
+            Log.d(TAG, "Initializing Camera..");
+
+            int numCameras = Camera.getNumberOfCameras();
+            CameraInfo cameraInfo = new CameraInfo();
+            for (int i = 0; i < numCameras; i++) {
+                Camera.getCameraInfo(i, cameraInfo);
+                Log.d(TAG, String.format("Camera %d facing=%d orientation=%d", i, cameraInfo.facing, cameraInfo.orientation));
+            }
+
+            try {
+                mCamera = Camera.open(0);
+                mCamera.setPreviewDisplay(surfaceHolder);
 
                 Log.d(TAG, "Setting up frame-capture buffers");
 
-			} catch (IOException e) {
-				Log.d(TAG, "Error setting preview surface: " + e);
-				
-			}
-		}
-		
-		// configure camera
-		Camera.Parameters params = mCamera.getParameters();
-		
-		Log.d(TAG, "Camera params: " + params.flatten());
+            } catch (IOException e) {
+                Log.d(TAG, "Error setting preview surface: " + e);
+
+            }
+        }
+
+        // configure camera
+        Camera.Parameters params = mCamera.getParameters();
+
+        Log.d(TAG, "Camera params: " + params.flatten());
 
 		/*
         List<Integer> supportedPreviewFormats = params.getSupportedPreviewFormats();
@@ -151,7 +160,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
             // 842094169 ~ YV12 ~ 4:2:0 YCrCb comprised of WXH Y plane, W/2xH/2 Cr & Cb. see documentation
             Log.v(TAG, "Supported preview format:" + previewFormat);
         }
-        
+
         Log.d(TAG, "Supported camera focus modes: " + TextUtils.join(",", params.getSupportedFocusModes()));
 
         Log.d(TAG, "Camera auto-exposure lock supported: " + params.isAutoExposureLockSupported());
@@ -171,7 +180,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         Log.d(TAG, "Camera flash mode: " + params.getFlashMode());
         Log.d(TAG, "Camera auto-exposure lock: " + params.getAutoExposureLock());
         Log.d(TAG, "Camera auto-white-balance lock: " + params.getAutoWhiteBalanceLock());
-        
+
         Log.d(TAG, "Camera zoom ratios: " + (params.getZoomRatios() == null ? "N/A" : TextUtils.join(",", params.getZoomRatios())));
         Log.d(TAG, "Camera zoom max: " + params.getMaxZoom());
         //Log.d(TAG, "Camera preferred preview size: " +  params.getPreferredPreviewSizeForVideo().width + " x " + params.getPreferredPreviewSizeForVideo().height);
@@ -183,11 +192,15 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         Log.d(TAG, "Camera preview fps range: " + minimumPreviewFpsRange[0] + " - " + minimumPreviewFpsRange[1]);
         */
 
-		Log.d(TAG, "Camera zoom ratios: " + (params.getZoomRatios() == null ? "N/A" : TextUtils.join(",", params.getZoomRatios())));
+        Log.d(TAG, "Camera zoom ratios: " + (params.getZoomRatios() == null ? "N/A" : TextUtils.join(",", params.getZoomRatios())));
         Log.d(TAG, "Camera zoom max: " + params.getMaxZoom());
-		
+
         String deviceManufacturerName = params.get("exif-make");
+        if (deviceManufacturerName == null)
+            deviceManufacturerName = "Unknown";
+
         Log.d(TAG, "deviceManufacturerName = [" + deviceManufacturerName + "]");
+
 
         switch (deviceManufacturerName) {
             case "Vuzix":
@@ -272,15 +285,16 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
             default:
                 Log.d(TAG, "Unrecognized run");
 
-                params.set("manual-exposure", 0);
-                params.set("contrast", 80);
-                params.set("zoom", 5);
+                //params.set("manual-exposure", 0);
+                //params.set("contrast", 80);
+                //params.set("zoom", 5);
 
-                params.setPreviewFpsRange(20000, 20000);
+                //params.setPreviewFpsRange(20000, 20000);
                 params.setPreviewSize(camera_width, camera_height);
+                mCamera.setDisplayOrientation(90);
                 break;
         }
-        
+
         // 10-30 fps
         // will run at 30fps if the exposure allows (good lighting)
         //params.setPreviewFpsRange(30000, 30000);
@@ -291,185 +305,176 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         // YUY2 = 600ms
         // YV12 = 30-60ms
         // NV12 = 40-70ms
-        
+
         // for 640x360 (quarter-res)
         // the bottleneck becomes the actual frame-length. if there is little light, exposure will grow to be 1/10th
         // which means each frame will only be available from the camera hardware every 100ms
         // if lighting is great and exposure is faster than 1/30, then we can get frames at 30fps
         // NV12 = 30ms
-        
+
         // in emulator @ 640x360
         // NV12 = 60ms
 
         Log.d(TAG, "Camera new preview size: " + params.getPreviewSize().width + " x " + params.getPreviewSize().height);
-        
+
         Log.d(TAG, "Configuring Camera..");
         mCamera.setParameters(params);
-        
+
         params = mCamera.getParameters();
         camera_width = params.getPreviewSize().width;
         camera_height = params.getPreviewSize().height;
-        
+
         Log.d(TAG, "Camera set preview size: " + camera_width + " x " + camera_height);
-        
+
         //AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         //audio.playSoundEffect(Sounds.SUCCESS);
 
         mLastFrame = SystemClock.elapsedRealtime();
-        
+
         mFrameBuffer = new byte[camera_width * camera_height * 3];
         mCamera.addCallbackBuffer(mFrameBuffer);
         mCamera.setPreviewCallbackWithBuffer(this);
-        
+
         mDebugBuffer = new byte[camera_width * camera_height * 3];
 
         mDebugBitmap = Bitmap.createBitmap(camera_width, camera_height, Bitmap.Config.RGB_565);
         mDebugCanvas = new Canvas(mDebugBitmap);
-        
-        Display display = getWindowManager().getDefaultDisplay();
+
         Point size = new Point();
         display.getSize(size);
-        
-        mScaleWidth = (float)size.x / (float)camera_width;
-        mScaleHeight = (float)size.y / (float)camera_height;
-        
-        Log.d(TAG, String.format("Scale: %3.2f x %3.2f", mScaleWidth, mScaleHeight));
-        
+
+        mScaleWidth = (float) size.x / (float) camera_width;
+        mScaleHeight = (float) size.y / (float) camera_height;
+
+        Log.d(TAG, String.format("Scale: %3.2f x %3.2f for display: %d x %d", mScaleWidth, mScaleHeight, size.x, size.y));
+
         mDebugViz.scaleX = mScaleWidth;
         mDebugViz.scaleY = mScaleHeight;
 
         Log.d(TAG, "Starting preview..");
-        
+
         // start capture
         mCamera.startPreview();
-        mCamera.startSmoothZoom(14);
+        //mCamera.startSmoothZoom(14);
 
         Log.d(TAG, "Starting preview.. Done");
-	}
-	
-	float mScaleWidth = 1;
-	float mScaleHeight = 1;
-	
-	@Override
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
-        
+
         Log.d(TAG, "Resuming");
 
         SurfaceView surfaceView = (SurfaceView) findViewById(R.id.preview_view);
         SurfaceHolder surfaceHolder = surfaceView.getHolder();
-        
+
         if (mHasSurface) {
-        	// we already have a preview surface
-        	// so go ahead and reinitialize the camera
-        	Log.d(TAG, "Re-initializing Camera after resume");
+            // we already have a preview surface
+            // so go ahead and reinitialize the camera
+            Log.d(TAG, "Re-initializing Camera after resume");
             initCamera(surfaceHolder);
         } else {
             // install a preview surface callback. when the surface is ready, init the camera
-        	Log.d(TAG, "Don't have a valid surface, adding add-callback, delaying camera-init");
+            Log.d(TAG, "Don't have a valid surface, adding add-callback, delaying camera-init");
             surfaceHolder.addCallback(this);
         }
-	}
-	
-	@Override
+    }
+
+    @Override
     protected void onPause() {
 
-		Log.d(TAG, "Pausing..");
-		
-		mPaused = true;
-		
-		if(mHandler != null) {
-			mHandler.quitSynchronously();
-			mHandler = null;
-		}
-		
-		// release camera
-		if(mCamera != null) {
-			Log.d(TAG, "Releasing camera..");
+        Log.d(TAG, "Pausing..");
+
+        mPaused = true;
+
+        if (mHandler != null) {
+            mHandler.quitSynchronously();
+            mHandler = null;
+        }
+
+        // release camera
+        if (mCamera != null) {
+            Log.d(TAG, "Releasing camera..");
             mCamera.setPreviewCallbackWithBuffer(null);
-			mCamera.stopPreview();
-			mCamera.release();
-			mCamera = null;
-		}
-		
-		// if we don't have a surface -- detach callback from it
-		// otherwise leave it alone
-		if(!mHasSurface) {
-			Log.d(TAG, "Detaching callback from preview surface..");
-			SurfaceView surfaceView = (SurfaceView) findViewById(R.id.preview_view);
+            mCamera.stopPreview();
+            mCamera.release();
+            mCamera = null;
+        }
+
+        // if we don't have a surface -- detach callback from it
+        // otherwise leave it alone
+        if (!mHasSurface) {
+            Log.d(TAG, "Detaching callback from preview surface..");
+            SurfaceView surfaceView = (SurfaceView) findViewById(R.id.preview_view);
             SurfaceHolder surfaceHolder = surfaceView.getHolder();
             surfaceHolder.removeCallback(this);
-		}
-	
+        }
+
         super.onPause();
     }
-	
-	@Override
+
+    @Override
     protected void onDestroy() {
-		Log.d(TAG, "Destroying");
+        Log.d(TAG, "Destroying");
         super.onDestroy();
     }
-	
-	Boolean mPaused = false;
-	
-    long mLastFrame;
+
     @Override
     public void onPreviewFrame(byte[] bytes, Camera camera) {
-    	
-    	//Log.d(TAG, "onPreviewFrame(); mReadyForMore = " + mReadyForMore);
-    	
-    	if(mHandler == null || mPaused)
-    		return;
-    	
-    	// we grabbed a frame, send it over to the scan-decoding thread
-    	if(mReadyForMore) {
-    		mHandler.submitDecodeJob(camera_width, camera_height, bytes);
-    		mReadyForMore = false;
-    	}
-    	
-    	mCamera.addCallbackBuffer(mFrameBuffer);
+
+        //Log.d(TAG, "onPreviewFrame(); mReadyForMore = " + mReadyForMore);
+
+        if (mHandler == null || mPaused)
+            return;
+
+        // we grabbed a frame, send it over to the scan-decoding thread
+        if (mReadyForMore) {
+            mHandler.submitDecodeJob(camera_width, camera_height, bytes);
+            mReadyForMore = false;
+        }
+
+        mCamera.addCallbackBuffer(mFrameBuffer);
     }
-    
-    Boolean mReadyForMore = true;
-    
+
     public void requestFrame() {
         mLastFrame = SystemClock.elapsedRealtime();
-    	//Log.d(TAG, "Frame-request delta: " + time_since_last_frame + " ms");
-    	mReadyForMore = true;
+        //Log.d(TAG, "Frame-request delta: " + time_since_last_frame + " ms");
+        mReadyForMore = true;
     }
-    
-    int mDetectCount = 0;
-    
+
     // called  by ScanActivity's Handler
     // with data from the decoding thread
     public void onQRCodeDecoded(Result rawResult) {
-    	if (rawResult != null)
-    	{
-    		if(mBeepLoaded)
-    			mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
-    		
-    		ResultPoint[] pts = rawResult.getResultPoints();
-    		
-    		Point pt = new Point();
-    		pt.x = (int) (pts[0].getX() + pts[1].getX() + pts[2].getX()) / 3;
-    		pt.y = (int) (pts[0].getY() + pts[1].getY() + pts[2].getY()) / 3;
-    		
-    		DebugVizHandler handler = mDebugViz.getHandler();
-    		if(handler != null) {
-	    		Message msg = Message.obtain(mDebugViz.getHandler(), R.id.submit_viz, pt);
-	        	msg.sendToTarget();
-    		}
-    		
-    		mDetectCount ++;
-    		TextView textView = (TextView) findViewById(R.id.textCount);
-    	    textView.setText(String.format("%d", mDetectCount));
-    	}
-    	
-    	mReadyForMore = true;
+        if (rawResult != null) {
+            if (mBeepLoaded)
+                mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
+
+            ResultPoint[] pts = rawResult.getResultPoints();
+
+            Point pt = new Point();
+            //pt.x = (int) (pts[0].getX() + pts[1].getX() + pts[2].getX()) / 3;
+            //pt.y = (int) (pts[0].getY() + pts[1].getY() + pts[2].getY()) / 3;
+
+            pt.x = (int) pts[0].getX();
+            pt.y = (int) pts[0].getY();
+
+            DebugVizHandler handler = mDebugViz.getHandler();
+            if (handler != null) {
+                Message msg = Message.obtain(mDebugViz.getHandler(), R.id.submit_viz, pt);
+                msg.sendToTarget();
+            }
+
+            mDetectCount++;
+            TextView textView = (TextView) findViewById(R.id.textCount);
+            textView.setText(String.format("%d", mDetectCount));
+        }
+
+        mReadyForMore = true;
     }
 
-	@Override
-	public void onCompletion(MediaPlayer mp) {
-		mp.seekTo(0);
-	}
+    @Override
+    public void onCompletion(MediaPlayer mp) {
+        mp.seekTo(0);
+    }
 }
