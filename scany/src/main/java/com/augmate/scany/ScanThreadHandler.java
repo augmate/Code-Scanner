@@ -8,10 +8,14 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.util.Log;
 import com.google.zxing.*;
+import com.google.zxing.common.DetectorResult;
+import com.google.zxing.common.GlobalHistogramBinarizer;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.QRCodeReader;
+import com.google.zxing.qrcode.detector.Detector;
 
 final class ScanThreadHandler extends Handler {
 
@@ -20,7 +24,6 @@ final class ScanThreadHandler extends Handler {
     private final ScanActivity mScanActivity;
     QRCodeReader mReaderQRCode = new QRCodeReader();
     long mLastFrame = 0;
-    byte[] binaryMatrix = new byte[0];
     private boolean mIsRunning = true;
 
     ScanThreadHandler(ScanActivity activity) {
@@ -81,6 +84,9 @@ final class ScanThreadHandler extends Handler {
         }
     }
 
+    private final int fixed_buffer_size = 640 * 360;
+    private final byte[] binaryMatrix = new byte[fixed_buffer_size];
+
     private void detect(byte[] data, int width, int height) {
 
         long start, end;
@@ -89,34 +95,11 @@ final class ScanThreadHandler extends Handler {
         long time_since_last_frame = start - mLastFrame;
         mLastFrame = start;
 
-        if (binaryMatrix.length < width * height)
-            binaryMatrix = new byte[width * height];
-
-//        // calculating even one row of luminance seems extremely painful
-//        double avgLuminance = 0;
-//        for(int i = 0; i < width; i ++) {
-//            avgLuminance += luminance(width, data, 200, i);
-//        }
-//        avgLuminance /= (double) width;
-//
-//        // scale from 0-255
-//        Log.d(TAG, String.format("avg luminance: %.3f", avgLuminance));
-
-        // for each scanline
-//        for (int y = 0; y < height; y++) {
-//            // for each pixel
-//            for (int x = 0; x < width; x++) {
-//                //double luminance = luminance(width, data, y, x);
-//                //binaryMatrix[y * width + x] = (byte) (luminance > 128 ? 1 : 0);
-//
-//                byte luminance = data[(y * width + x) * 3];
-//                binaryMatrix[y * width + x] = (byte) (luminance > 70 ? 1 : 0);
-//            }
+//        for (int i = 0; i < fixed_buffer_size; i++) {
+//            binaryIntMatrix[i] = (byte) (((data[i] & 0xff) < 70) ? 0 : 1);
 //        }
 
-        for (int i = 0; i < width * height; i++) {
-            binaryMatrix[i] = (byte) (data[i * 3] < 60 ? 0 : 1);
-        }
+        NativeUtils.binarize(data, binaryMatrix, 640, 360);
 
         long conversion = SystemClock.elapsedRealtime();
 
@@ -172,10 +155,13 @@ final class ScanThreadHandler extends Handler {
 
         long conversion = SystemClock.elapsedRealtime();
 
-        Result rawResult = null;
+        //Result rawResult = null;
+        DetectorResult detectorResult = null;
 
         try {
-            rawResult = mReaderQRCode.decode(bitmap);
+            //rawResult = mReaderQRCode.decode(bitmap);
+            detectorResult = new Detector(bitmap.getBlackMatrix()).detect(null);
+            //Log.d(TAG, "detectorResult = num points = " + detectorResult.getPoints().length);
         } catch (Exception re) {
             // tag not found. shouldn't throw, but whatever.
             // Log.w(TAG, "QR Code reader faulted: " + re.toString());
@@ -187,17 +173,17 @@ final class ScanThreadHandler extends Handler {
 
         Handler targetHandler = mScanActivity.getHandler();
 
-        if (rawResult != null) {
+        if (detectorResult != null) {
             Log.i(TAG, "QR-decode succeeded (!) in " + (end - start) + " ms (last frame = " + time_since_last_frame + " ms) (conversion = " + (conversion - start) + " ms)");
 
             // tell scan-activity we got a decoded image
             if (targetHandler != null) {
-                Message msg = Message.obtain(targetHandler, R.id.decode_succeeded, rawResult);
+                Message msg = Message.obtain(targetHandler, R.id.decode_succeeded, detectorResult);
                 msg.sendToTarget();
             }
         } else {
             // nothing decoded from image, request another
-            Log.d(TAG, "QR-decode failed in " + (end - start) + " ms (last frame = " + time_since_last_frame + " ms)");
+            //Log.d(TAG, "QR-decode failed in " + (end - start) + " ms (last frame = " + time_since_last_frame + " ms)");
 
             if (targetHandler != null) {
                 Message msg = Message.obtain(targetHandler, R.id.decode_failed);

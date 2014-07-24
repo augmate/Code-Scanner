@@ -1,7 +1,4 @@
 .gradle
-/local.properties
-/.idea/workspace.xml
-.DS_Store
 /build/dex-cache
 /.idea/codeStyleSettings.xml
 /.idea/dictionaries/Aleksandr.xml
@@ -11,3 +8,10 @@
 /.idea/libraries/core_3_0_1.xml
 /.idea/libraries/support_v4_19_1_0.xml
 /build
+/local.properties
+/.idea/workspace.xml
+.DS_Store
+.idea/codeStyleSettings.xml
+.idea/libraries
+scany/src/main/obj
+scany/src/main/libs

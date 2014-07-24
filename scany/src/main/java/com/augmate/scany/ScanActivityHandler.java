@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 import com.google.zxing.Result;
+import com.google.zxing.common.DetectorResult;
 
 // activity-handler spawns the decoding-thread
 // and handles communication with it

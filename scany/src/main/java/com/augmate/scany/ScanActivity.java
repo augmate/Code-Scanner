@@ -1,10 +1,7 @@
 package com.augmate.scany;
 
 import android.app.Activity;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.ImageFormat;
-import android.graphics.Point;
+import android.graphics.*;
 import android.hardware.Camera;
 import android.hardware.Camera.CameraInfo;
 import android.media.AudioManager;
@@ -21,6 +18,7 @@ import android.view.Display;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.WindowManager;
+import android.widget.ImageView;
 import android.widget.TextView;
 import com.google.zxing.Result;
 import com.google.zxing.ResultPoint;
@@ -46,8 +44,8 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     SoundPool mSoundPool;
 
     // end of SurfaceHolder.Callback
-    int camera_width = 1280;
-    int camera_height = 720;
+    int camera_width = 640;
+    int camera_height = 360;
     float mScaleWidth = 1;
     float mScaleHeight = 1;
     Boolean mPaused = false;
@@ -82,6 +80,8 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 
     }
 
+    ImageView mDebugImg;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -92,6 +92,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 
         setContentView(R.layout.activity_main);
 
+        mDebugImg = (ImageView) findViewById(R.id.debug_view_img);
         mDebugViz = (DebugViz) findViewById(R.id.debug_view);
 
         mSoundPool = new SoundPool(5, AudioManager.STREAM_MUSIC, 0);
@@ -255,7 +256,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
                 //params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
                 params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
                 //params.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
-                params.setAutoWhiteBalanceLock(true);
+                //params.setAutoWhiteBalanceLock(true);
                 //params.setRecordingHint(true);
                 //params.setVideoStabilization(true);
 
@@ -291,7 +292,8 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 
                 //params.setPreviewFpsRange(20000, 20000);
                 params.setPreviewSize(camera_width, camera_height);
-                mCamera.setDisplayOrientation(90);
+                //params.set("orientation", "landscape");
+                //mCamera.setDisplayOrientation(0);
                 break;
         }
 
@@ -335,6 +337,10 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         mCamera.addCallbackBuffer(mFrameBuffer);
         mCamera.setPreviewCallbackWithBuffer(this);
 
+        //ImageFormat.NV21
+
+        Log.d(TAG, String.format("Preview format: %X", params.getPreviewFormat()));
+
         mDebugBuffer = new byte[camera_width * camera_height * 3];
 
         mDebugBitmap = Bitmap.createBitmap(camera_width, camera_height, Bitmap.Config.RGB_565);
@@ -355,7 +361,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 
         // start capture
         mCamera.startPreview();
-        //mCamera.startSmoothZoom(14);
+        mCamera.startSmoothZoom(14);
 
         Log.d(TAG, "Starting preview.. Done");
     }
@@ -420,18 +426,66 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         super.onDestroy();
     }
 
+    byte[] binaryByteMatrix = new byte[0];
+    int[] binaryIntMatrix = new int[0];
+
+    // http://stackoverflow.com/questions/5272388/extract-black-and-white-image-from-android-cameras-nv21-format/12702836#12702836
+    static public void decodeYUV420SPtoGrayscale(int[] argb, byte[] yuv420sp, int width, int height) {
+
+        for (int i = 0; i < width * height; i++) {
+            int luminance = yuv420sp[i] & 0xFF;
+            argb[i] = 0xff000000 | luminance << 8;
+        }
+    }
+
     @Override
     public void onPreviewFrame(byte[] bytes, Camera camera) {
-
-        //Log.d(TAG, "onPreviewFrame(); mReadyForMore = " + mReadyForMore);
+//
+//        if (binaryIntMatrix.length < camera_width * camera_height) {
+//            binaryIntMatrix = new int[camera_width * camera_height];
+//            Log.d(TAG, "growing binary int-matrix buffer");
+//        }
+//
+//        if(binaryByteMatrix.length < camera_width * camera_height) {
+//            binaryByteMatrix = new byte[camera_width * camera_height];
+//            Log.d(TAG, "growing binary byte-matrix buffer");
+//        }
+//
+//        long start;
+//        long span;
+//
+//        start = SystemClock.elapsedRealtime();
+//
+//        NativeUtils.binarize(bytes, binaryByteMatrix, camera_width, camera_height);
+//
+//        span = SystemClock.elapsedRealtime() - start;
+//
+//        Log.d(TAG, "Native grayscale convert took " + span + " msec");
+//
+//        start = SystemClock.elapsedRealtime();
+//
+//        //decodeYUV420SPtoGrayscale(binaryIntMatrix, bytes, camera_width, camera_height);
+//
+//        for (int i = 0; i < camera_width * camera_height; i++) {
+//            //int value = ((bytes[i] & 0xff) < 70) ? 0 : 255;
+//            //binaryIntMatrix[i] = 0x55000000 | ((value << 16) & 0x00ff0000);
+//            binaryIntMatrix[i] = 0xFF000000 | (binaryByteMatrix[i] << 8) & 0x00ff0000;
+//        }
+//
+//        span = SystemClock.elapsedRealtime() - start;
+//
+//        Log.d(TAG, "Java grayscale convert took   " + span + " msec");
+//
+//        Bitmap bmp = Bitmap.createBitmap(binaryIntMatrix, camera_width, camera_height, Bitmap.Config.ARGB_8888);
+//        mDebugImg.setImageBitmap(bmp);
 
         if (mHandler == null || mPaused)
             return;
 
         // we grabbed a frame, send it over to the scan-decoding thread
         if (mReadyForMore) {
-            mHandler.submitDecodeJob(camera_width, camera_height, bytes);
             mReadyForMore = false;
+            mHandler.submitDecodeJob(camera_width, camera_height, bytes);
         }
 
         mCamera.addCallbackBuffer(mFrameBuffer);
@@ -447,8 +501,8 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     // with data from the decoding thread
     public void onQRCodeDecoded(Result rawResult) {
         if (rawResult != null) {
-            if (mBeepLoaded)
-                mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
+//            if (mBeepLoaded)
+//                mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
 
             ResultPoint[] pts = rawResult.getResultPoints();
 

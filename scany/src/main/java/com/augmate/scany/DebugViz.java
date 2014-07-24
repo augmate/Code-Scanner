@@ -1,6 +1,7 @@
 package com.augmate.scany;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Point;
@@ -49,7 +50,7 @@ public class DebugViz extends View {
         ArrayList<Point> pts = new ArrayList<Point>(mMessagePoints);
 
         for (Point point : pts) {
-            point.y -= 2;
+            point.y -= 18;
 
             if (point.y < -10)
                 mMessagePoints.remove(point);
