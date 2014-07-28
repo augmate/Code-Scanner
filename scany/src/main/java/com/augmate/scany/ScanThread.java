@@ -7,7 +7,7 @@ import java.util.concurrent.CountDownLatch;
 
 final class ScanThread extends Thread {
 
-    public static final String TAG = "DecodeThread";
+    public static final String TAG = ScanThread.class.getName();
 
     private final ScanActivity activity;
     private final CountDownLatch handlerInitLatch;
@@ -18,6 +18,7 @@ final class ScanThread extends Thread {
         handlerInitLatch = new CountDownLatch(1);
     }
 
+    // blocks and waits on thread to enter
     Handler getHandler() {
         try {
             handlerInitLatch.await();
@@ -27,6 +28,7 @@ final class ScanThread extends Thread {
         return handler;
     }
 
+    // thread entry-point
     @Override
     public void run() {
         Looper.prepare();

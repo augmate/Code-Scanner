@@ -15,3 +15,5 @@
 .idea/libraries
 scany/src/main/obj
 scany/src/main/libs
+scany/libs
+scany/obj

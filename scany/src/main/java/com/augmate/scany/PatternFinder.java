@@ -566,7 +566,7 @@ public class PatternFinder {
             return false;
         }
         // OK, we have at least 3 confirmed centers, but, it's possible that one is a "false positive"
-        // and that we need to keep looking. We detect this by asking if the estimated module sizes
+        // and that we need to keep looking. We detectQrCodeOnly this by asking if the estimated module sizes
         // vary too much. We arbitrarily say that when the total deviation from average exceeds
         // 5% of the total module size estimates, it's too much.
         float average = totalModuleSize / (float) max;

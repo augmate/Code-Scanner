@@ -1,7 +1,6 @@
 package com.augmate.scany;
 
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Point;
@@ -13,18 +12,23 @@ import com.google.zxing.ResultPoint;
 import java.util.ArrayList;
 
 public class DebugViz extends View {
-
     private static final String TAG = "ScanActivity";
 
     public ResultPoint[] points;
-    public float scaleX = 1, scaleY = 1;
     public ArrayList<Point> mMessagePoints = new ArrayList<Point>();
+
+    private Point bottomLeft = null;
+    private Point topLeft = null;
+    private Point topRight = null;
+
+    private Paint outlineColor = null;
+    private Paint outlinePointsColor = null;
+
     DebugVizHandler mHandler;
     Paint _PaintColor;
 
     public DebugViz(Context context) {
         super(context);
-
 //        if (!isInEditMode()) {
 //            setLayerType(View.LAYER_TYPE_HARDWARE, null);
 //        }
@@ -32,6 +36,7 @@ public class DebugViz extends View {
 
     public DebugViz(Context context, AttributeSet attr) {
         super(context, attr);
+        mHandler = new DebugVizHandler(this);
     }
 
     public DebugVizHandler getHandler() {
@@ -41,11 +46,6 @@ public class DebugViz extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
-        if (mHandler == null)
-            mHandler = new DebugVizHandler(this);
-
-        //drawResultPoints(canvas);
 
         ArrayList<Point> pts = new ArrayList<Point>(mMessagePoints);
 
@@ -62,10 +62,32 @@ public class DebugViz extends View {
             _PaintColor.setStrokeWidth(25.0f);
         }
 
+        if (outlineColor == null) {
+            outlineColor = new Paint();
+            outlineColor.setColor(0xEE22AA99);
+            outlineColor.setStrokeWidth(8.0f);
+
+            outlinePointsColor = new Paint();
+            outlinePointsColor.setColor(0xAA22AA99);
+            outlinePointsColor.setStrokeWidth(20.0f);
+        }
+
         for (Point point : pts) {
             //Log.i(TAG, "drawing point: " + ((float)point.x * scaleX) + "," + ((float)point.y * scaleY));
-            canvas.drawCircle((float) point.x * scaleX, (float) point.y * scaleY, 25.0f, _PaintColor);
+            canvas.drawCircle((float) point.x, (float) point.y, 25.0f, _PaintColor);
             canvas.drawCircle((float) point.x, (float) point.y, 15.0f, _PaintColor);
+        }
+
+        if (bottomLeft != null) {
+
+            canvas.drawPoint(topLeft.x, topLeft.y, outlinePointsColor);
+            canvas.drawPoint(topRight.x, topRight.y, outlinePointsColor);
+            canvas.drawPoint(bottomLeft.x, bottomLeft.y, outlinePointsColor);
+
+            drawLine(canvas, outlineColor, bottomLeft, topLeft);
+            drawLine(canvas, outlineColor, topLeft, topRight);
+            //drawLine(canvas, outlineColor, topRight, pts[3]);
+            //drawLine(canvas, outlineColor, pts[3], pts[0]);
         }
 
         postInvalidate();
@@ -75,10 +97,14 @@ public class DebugViz extends View {
         mMessagePoints.add(pt);
     }
 
-    public void AddPoints(ResultPoint[] pts) {
-
+    public void setPoints(Point bottomLeft, Point topLeft, Point topRight) {
+        Log.d(TAG, "Setting points");
+        this.bottomLeft = bottomLeft;
+        this.topLeft = topLeft;
+        this.topRight = topRight;
     }
 
+    @Deprecated
     private void drawResultPoints(Canvas canvas) {
         if (points == null)
             return;
@@ -107,14 +133,14 @@ public class DebugViz extends View {
 
         pts[3] = new ResultPoint(bottomRightX, bottomRightY);
 
-        drawLine(canvas, red, pts[0], pts[1]);
-        drawLine(canvas, red, pts[1], pts[2]);
-        drawLine(canvas, red, pts[2], pts[3]);
-        drawLine(canvas, red, pts[3], pts[0]);
+//        drawLine(canvas, red, pts[0], pts[1]);
+//        drawLine(canvas, red, pts[1], pts[2]);
+//        drawLine(canvas, red, pts[2], pts[3]);
+//        drawLine(canvas, red, pts[3], pts[0]);
 
         red.setStrokeWidth(10.0f);
         for (int i = 0; i < 4; i++)
-            canvas.drawPoint(pts[i].getX() * scaleX, pts[i].getY() * scaleY, red);
+            canvas.drawPoint(pts[i].getX(), pts[i].getY(), red);
 
 //		if (points != null && points.length > 0)
 //		{
@@ -140,10 +166,9 @@ public class DebugViz extends View {
 //		}
     }
 
-    private void drawLine(Canvas canvas, Paint paint, ResultPoint a, ResultPoint b) {
+    private void drawLine(Canvas canvas, Paint paint, Point a, Point b) {
         if (a != null && b != null) {
-            canvas.drawLine(scaleX * a.getX(), scaleY * a.getY(),
-                    scaleX * b.getX(), scaleY * b.getY(), paint);
+            canvas.drawLine(a.x, a.y, b.x, b.y, paint);
         }
     }
 }

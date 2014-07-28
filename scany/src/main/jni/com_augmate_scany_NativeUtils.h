@@ -10,10 +10,18 @@ extern "C" {
 /*
  * Class:     com_augmate_scany_NativeUtils
  * Method:    binarize
- * Signature: ([B[III)V
+ * Signature: ([B[BII)V
  */
 JNIEXPORT void JNICALL Java_com_augmate_scany_NativeUtils_binarize
   (JNIEnv *, jclass, jbyteArray, jbyteArray, jint, jint);
+
+/*
+ * Class:     com_augmate_scany_NativeUtils
+ * Method:    binarizeToIntBuffer
+ * Signature: ([B[III)V
+ */
+JNIEXPORT void JNICALL Java_com_augmate_scany_NativeUtils_binarizeToIntBuffer
+  (JNIEnv *, jclass, jbyteArray, jintArray, jint, jint);
 
 #ifdef __cplusplus
 }

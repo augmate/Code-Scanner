@@ -39,3 +39,25 @@ JNIEXPORT void JNICALL Java_com_augmate_scany_NativeUtils_binarize(
 
     return;
 }
+
+// front-facing cameras are mirrored, so we must manually flip horizontally here
+JNIEXPORT void JNICALL Java_com_augmate_scany_NativeUtils_binarizeToIntBuffer(
+    JNIEnv *env, jclass unused, jbyteArray srcArray, jintArray dstArray, jint width, jint height
+) {
+    jbyte* src = (*env)->GetByteArrayElements(env, srcArray, NULL);
+    jint* dst = (*env)->GetIntArrayElements(env, dstArray, NULL);
+
+    int x, y;
+    for(y = 0; y < height; y ++) {
+        for(x = 0; x < width; x ++) {
+            int value = (src[y * width + x] & 0xFF) < 80 ? 0 : 255;
+            //dst[y * width + (width - x - 1)] = 0xff000000 | ((value << 8) & 0x0000ff00); // mirrored
+            dst[y * width + x] = 0xff000000 | ((value << 8) & 0x0000ff00);
+        }
+    }
+
+    (*env)->ReleaseByteArrayElements(env, srcArray, src, JNI_ABORT);
+    (*env)->ReleaseIntArrayElements(env, dstArray, dst, 0);
+
+    return;
+}

@@ -8,34 +8,24 @@ import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.SoundPool;
 import android.media.SoundPool.OnLoadCompleteListener;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
-import android.os.SystemClock;
-import android.text.TextUtils;
+import android.os.*;
 import android.util.Log;
-import android.view.Display;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
-import android.view.WindowManager;
+import android.view.*;
 import android.widget.ImageView;
 import android.widget.TextView;
-import com.google.zxing.Result;
 import com.google.zxing.ResultPoint;
 
 import java.io.IOException;
 
 public class ScanActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback, MediaPlayer.OnCompletionListener {
-    private static final String TAG = "Activity";
+    private static final String TAG = ScanActivity.class.getName();
 
     Camera mCamera;
     Boolean mHasSurface = false;
-    byte[] mFrameBuffer;
-    byte[] mDebugBuffer;
-    Bitmap mDebugBitmap;
-    Canvas mDebugCanvas;
+    byte[] previewBufferOne;
+    byte[] previewBufferTwo;
 
-    ScanActivityHandler mHandler;
+    ScanActivityHelper scannerHandler;
     DebugViz mDebugViz;
 
     // start of SurfaceHolder.Callback
@@ -44,17 +34,18 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     SoundPool mSoundPool;
 
     // end of SurfaceHolder.Callback
-    int camera_width = 640;
-    int camera_height = 360;
-    float mScaleWidth = 1;
-    float mScaleHeight = 1;
+    int previewFrameWidth = 640;
+    int previewFrameHeight = 360;
+    float visualizationScaleX = 1;
+    float visualizationScaleY = 1;
     Boolean mPaused = false;
-    long mLastFrame;
     Boolean mReadyForMore = true;
     int mDetectCount = 0;
+    private Point debugCanvasSize;
+    private SurfaceView surfaceView;
 
     public Handler getHandler() {
-        return mHandler;
+        return scannerHandler;
     }
 
     @Override
@@ -66,7 +57,7 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
             mHasSurface = true;
             Log.d(TAG, "Got preview surface");
             initCamera(holder);
-            mHandler = new ScanActivityHandler(this);
+            scannerHandler = new ScanActivityHelper(this);
         }
     }
 
@@ -81,11 +72,11 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
     }
 
     ImageView mDebugImg;
+    Point renderingSize;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.d(TAG, "Starting.. v1");
 
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -94,6 +85,21 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 
         mDebugImg = (ImageView) findViewById(R.id.debug_view_img);
         mDebugViz = (DebugViz) findViewById(R.id.debug_view);
+        surfaceView = (SurfaceView) findViewById(R.id.preview_view);
+
+        Display display = getWindowManager().getDefaultDisplay();
+        debugCanvasSize = new Point();
+        display.getSize(debugCanvasSize);
+
+        ViewGroup.LayoutParams layoutParams = mDebugViz.getLayoutParams();
+        layoutParams.width = debugCanvasSize.x;
+        layoutParams.height = (int) (layoutParams.width / 1.777777);
+        renderingSize = new Point(layoutParams.width, layoutParams.height);
+        Log.d(TAG, "New layout: " + layoutParams.width + " x " + layoutParams.height);
+
+        mDebugViz.setLayoutParams(layoutParams);
+        mDebugImg.setLayoutParams(layoutParams);
+        surfaceView.setLayoutParams(layoutParams);
 
         mSoundPool = new SoundPool(5, AudioManager.STREAM_MUSIC, 0);
         mSoundPool.setOnLoadCompleteListener(new OnLoadCompleteListener() {
@@ -128,14 +134,13 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
             CameraInfo cameraInfo = new CameraInfo();
             for (int i = 0; i < numCameras; i++) {
                 Camera.getCameraInfo(i, cameraInfo);
-                Log.d(TAG, String.format("Camera %d facing=%d orientation=%d", i, cameraInfo.facing, cameraInfo.orientation));
+                Log.d(TAG, String.format("  Camera %d facing=%d orientation=%d", i, cameraInfo.facing, cameraInfo.orientation));
             }
 
             try {
                 mCamera = Camera.open(0);
                 mCamera.setPreviewDisplay(surfaceHolder);
-
-                Log.d(TAG, "Setting up frame-capture buffers");
+                Log.d(TAG, "Camera opened.");
 
             } catch (IOException e) {
                 Log.d(TAG, "Error setting preview surface: " + e);
@@ -146,62 +151,15 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         // configure camera
         Camera.Parameters params = mCamera.getParameters();
 
-        Log.d(TAG, "Camera params: " + params.flatten());
+        Log.d(TAG, "Hardware build: " + Build.PRODUCT + " / " + Build.DEVICE + " / " + Build.MODEL + " / " + Build.BRAND);
 
-		/*
-        List<Integer> supportedPreviewFormats = params.getSupportedPreviewFormats();
-        Iterator<Integer> supportedPreviewFormatsIterator = supportedPreviewFormats.iterator();
-        while(supportedPreviewFormatsIterator.hasNext()){
-            Integer previewFormat =supportedPreviewFormatsIterator.next();
-            // 16 ~ NV16 ~ YCbCr
-            // 17 ~ NV21 ~ YCbCr ~ DEFAULT
-            // 4  ~ RGB_565
-            // 256~ JPEG
-            // 20 ~ YUY2 ~ YcbCr ...
-            // 842094169 ~ YV12 ~ 4:2:0 YCrCb comprised of WXH Y plane, W/2xH/2 Cr & Cb. see documentation
-            Log.v(TAG, "Supported preview format:" + previewFormat);
-        }
-
-        Log.d(TAG, "Supported camera focus modes: " + TextUtils.join(",", params.getSupportedFocusModes()));
-
-        Log.d(TAG, "Camera auto-exposure lock supported: " + params.isAutoExposureLockSupported());
-        Log.d(TAG, "Camera white-balance lock supported: " + params.isAutoWhiteBalanceLockSupported());
-        Log.d(TAG, "Camera zoom supported: " + params.isZoomSupported());
-        Log.d(TAG, "Camera smooth zoom supported: " + params.isSmoothZoomSupported());
-        Log.d(TAG, "Camera video stabilization supported: " + params.isVideoStabilizationSupported());
-
-        Log.d(TAG, "Camera white-balance: " + params.getWhiteBalance());
-        Log.d(TAG, "Camera exposure-compensation: " + params.getExposureCompensation());
-        Log.d(TAG, "Camera exposure-compensation step: " + params.getExposureCompensationStep());
-        Log.d(TAG, "Camera exposure-compensation min: " + params.getMinExposureCompensation());
-        Log.d(TAG, "Camera exposure-compensation max: " + params.getMaxExposureCompensation());
-        Log.d(TAG, "Camera focal length: " + params.getFocalLength());
-        Log.d(TAG, "Camera fov: " + params.getHorizontalViewAngle());
-        Log.d(TAG, "Camera focus mode: " + params.getFocusMode());
-        Log.d(TAG, "Camera flash mode: " + params.getFlashMode());
-        Log.d(TAG, "Camera auto-exposure lock: " + params.getAutoExposureLock());
-        Log.d(TAG, "Camera auto-white-balance lock: " + params.getAutoWhiteBalanceLock());
-
-        Log.d(TAG, "Camera zoom ratios: " + (params.getZoomRatios() == null ? "N/A" : TextUtils.join(",", params.getZoomRatios())));
-        Log.d(TAG, "Camera zoom max: " + params.getMaxZoom());
-        //Log.d(TAG, "Camera preferred preview size: " +  params.getPreferredPreviewSizeForVideo().width + " x " + params.getPreferredPreviewSizeForVideo().height);
-        Log.d(TAG, "Camera old preview size: " + params.getPreviewSize().width + " x " + params.getPreviewSize().height);
-        Log.d(TAG, "Camera preview format: " + params.getPreviewFormat());
-
-        List<int[]> supportedPreviewFpsRanges = params.getSupportedPreviewFpsRange();
-        int[] minimumPreviewFpsRange = supportedPreviewFpsRanges.get(0);
-        Log.d(TAG, "Camera preview fps range: " + minimumPreviewFpsRange[0] + " - " + minimumPreviewFpsRange[1]);
-        */
-
-        Log.d(TAG, "Camera zoom ratios: " + (params.getZoomRatios() == null ? "N/A" : TextUtils.join(",", params.getZoomRatios())));
-        Log.d(TAG, "Camera zoom max: " + params.getMaxZoom());
+        Log.d(TAG, "Current camera params: " + params.flatten());
 
         String deviceManufacturerName = params.get("exif-make");
         if (deviceManufacturerName == null)
             deviceManufacturerName = "Unknown";
 
-        Log.d(TAG, "deviceManufacturerName = [" + deviceManufacturerName + "]");
-
+        Log.d(TAG, "  deviceManufacturerName = [" + deviceManufacturerName + "]");
 
         switch (deviceManufacturerName) {
             case "Vuzix":
@@ -213,28 +171,12 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
                 params.setExposureCompensation(0);
                 params.setVideoStabilization(true);
 
-                ///?params.setFocusMode("FOCUS_MODE_MACRO");
-                ///params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
-                ///params.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED); // doesn't work
-                //params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
-
-                //params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
-                //params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_PICTURE);
-
                 params.setPreviewFpsRange(27000, 27000);
-                ///params.set("saturation", "70");
                 params.set("iso", "800");
                 params.set("scene-mode", "barcode");
-                ///params.set("mode", "high-quality");
-
-                ///params.set("whitebalance", "shade");
-                ///params.set("manual-exposure", "1");
-                ///params.set("exposure", "1");
-
-                //params.set("focus-mode", "on");
 
                 // vuzix tweaks
-                params.setPreviewSize(camera_width, camera_height);
+                params.setPreviewSize(previewFrameWidth, previewFrameHeight);
                 break;
             case "Epson":
                 Log.d(TAG, "Optimizing for Epson Moverio");
@@ -252,17 +194,17 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
                 //params.set("manual-exposure", 2);
                 //params.set("mode", "high-performance");
                 //params.setExposureCompensation(50);
-                params.set("iso", 800);
                 //params.setWhiteBalance(Camera.Parameters.WHITE_BALANCE_SHADE);
-                params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
                 //params.setFocusMode(Camera.Parameters.FOCUS_MODE_FIXED);
                 //params.setAutoWhiteBalanceLock(true);
                 //params.setRecordingHint(true);
                 //params.setVideoStabilization(true);
 
+                params.set("iso", 800);
+                params.setSceneMode(Camera.Parameters.SCENE_MODE_BARCODE);
                 params.setPreviewFormat(ImageFormat.NV21);
                 params.setPreviewFpsRange(30000, 30000);
-                params.setPreviewSize(camera_width, camera_height);
+                params.setPreviewSize(previewFrameWidth, previewFrameHeight);
                 break;
             case "Emulator":
                 Log.d(TAG, "Emulator run");
@@ -272,90 +214,48 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 
                 params.set("manual-exposure", 0);
                 params.set("contrast", 80);
-                //params.set("iso-mode-values", 100);
                 params.set("zoom", 10);
-                //params.set("scene-mode-values", "barcode");
                 params.set("video-stabilization", 80);
                 params.set("whitebalance", "warm-fluorescent");
 
                 params.setPreviewFormat(ImageFormat.NV21);
                 params.setPreviewFpsRange(30000, 30000);
-                params.setPreviewSize(camera_width, camera_height);
+                params.setPreviewSize(previewFrameWidth, previewFrameHeight);
 
                 break;
             default:
-                Log.d(TAG, "Unrecognized run");
+                Log.d(TAG, "Unrecognized device run");
 
-                //params.set("manual-exposure", 0);
-                //params.set("contrast", 80);
-                //params.set("zoom", 5);
-
-                //params.setPreviewFpsRange(20000, 20000);
-                params.setPreviewSize(camera_width, camera_height);
-                //params.set("orientation", "landscape");
-                //mCamera.setDisplayOrientation(0);
+                params.setPreviewSize(previewFrameWidth, previewFrameHeight);
                 break;
         }
 
-        // 10-30 fps
-        // will run at 30fps if the exposure allows (good lighting)
-        //params.setPreviewFpsRange(30000, 30000);
-        //params.setPreviewSize(camera_width, camera_height);
-        //params.setPreviewFormat(ImageFormat.NV21);
-
-        // for a 1280x720 image with a single preallocated buffer:
-        // YUY2 = 600ms
-        // YV12 = 30-60ms
-        // NV12 = 40-70ms
-
-        // for 640x360 (quarter-res)
-        // the bottleneck becomes the actual frame-length. if there is little light, exposure will grow to be 1/10th
-        // which means each frame will only be available from the camera hardware every 100ms
-        // if lighting is great and exposure is faster than 1/30, then we can get frames at 30fps
-        // NV12 = 30ms
-
-        // in emulator @ 640x360
-        // NV12 = 60ms
-
-        Log.d(TAG, "Camera new preview size: " + params.getPreviewSize().width + " x " + params.getPreviewSize().height);
+        Log.d(TAG, "Proposing new camera preview size: " + params.getPreviewSize().width + " x " + params.getPreviewSize().height);
 
         Log.d(TAG, "Configuring Camera..");
         mCamera.setParameters(params);
 
         params = mCamera.getParameters();
-        camera_width = params.getPreviewSize().width;
-        camera_height = params.getPreviewSize().height;
+        previewFrameWidth = params.getPreviewSize().width;
+        previewFrameHeight = params.getPreviewSize().height;
 
-        Log.d(TAG, "Camera set preview size: " + camera_width + " x " + camera_height);
+        Log.d(TAG, "Camera accepted preview size: " + previewFrameWidth + " x " + previewFrameHeight);
 
         //AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         //audio.playSoundEffect(Sounds.SUCCESS);
 
-        mLastFrame = SystemClock.elapsedRealtime();
-
-        mFrameBuffer = new byte[camera_width * camera_height * 3];
-        mCamera.addCallbackBuffer(mFrameBuffer);
+        previewBufferOne = new byte[previewFrameWidth * previewFrameHeight * 3];
+        previewBufferTwo = new byte[previewFrameWidth * previewFrameHeight * 3];
+        mCamera.addCallbackBuffer(previewBufferOne);
+        mCamera.addCallbackBuffer(previewBufferTwo);
         mCamera.setPreviewCallbackWithBuffer(this);
 
-        //ImageFormat.NV21
+        Log.d(TAG, String.format("Using preview format: %X", params.getPreviewFormat()));
 
-        Log.d(TAG, String.format("Preview format: %X", params.getPreviewFormat()));
+        visualizationScaleX = (float) renderingSize.x / (float) previewFrameWidth;
+        visualizationScaleY = (float) renderingSize.y / (float) previewFrameHeight;
 
-        mDebugBuffer = new byte[camera_width * camera_height * 3];
-
-        mDebugBitmap = Bitmap.createBitmap(camera_width, camera_height, Bitmap.Config.RGB_565);
-        mDebugCanvas = new Canvas(mDebugBitmap);
-
-        Point size = new Point();
-        display.getSize(size);
-
-        mScaleWidth = (float) size.x / (float) camera_width;
-        mScaleHeight = (float) size.y / (float) camera_height;
-
-        Log.d(TAG, String.format("Scale: %3.2f x %3.2f for display: %d x %d", mScaleWidth, mScaleHeight, size.x, size.y));
-
-        mDebugViz.scaleX = mScaleWidth;
-        mDebugViz.scaleY = mScaleHeight;
+        Log.d(TAG, String.format("Visualization scale: %.2f x %.2f", visualizationScaleX, visualizationScaleY));
 
         Log.d(TAG, "Starting preview..");
 
@@ -372,7 +272,6 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 
         Log.d(TAG, "Resuming");
 
-        SurfaceView surfaceView = (SurfaceView) findViewById(R.id.preview_view);
         SurfaceHolder surfaceHolder = surfaceView.getHolder();
 
         if (mHasSurface) {
@@ -394,9 +293,9 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
 
         mPaused = true;
 
-        if (mHandler != null) {
-            mHandler.quitSynchronously();
-            mHandler = null;
+        if (scannerHandler != null) {
+            scannerHandler.quitSynchronously();
+            scannerHandler = null;
         }
 
         // release camera
@@ -412,7 +311,6 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         // otherwise leave it alone
         if (!mHasSurface) {
             Log.d(TAG, "Detaching callback from preview surface..");
-            SurfaceView surfaceView = (SurfaceView) findViewById(R.id.preview_view);
             SurfaceHolder surfaceHolder = surfaceView.getHolder();
             surfaceHolder.removeCallback(this);
         }
@@ -426,97 +324,59 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         super.onDestroy();
     }
 
-    byte[] binaryByteMatrix = new byte[0];
     int[] binaryIntMatrix = new int[0];
-
-    // http://stackoverflow.com/questions/5272388/extract-black-and-white-image-from-android-cameras-nv21-format/12702836#12702836
-    static public void decodeYUV420SPtoGrayscale(int[] argb, byte[] yuv420sp, int width, int height) {
-
-        for (int i = 0; i < width * height; i++) {
-            int luminance = yuv420sp[i] & 0xFF;
-            argb[i] = 0xff000000 | luminance << 8;
-        }
-    }
 
     @Override
     public void onPreviewFrame(byte[] bytes, Camera camera) {
-//
-//        if (binaryIntMatrix.length < camera_width * camera_height) {
-//            binaryIntMatrix = new int[camera_width * camera_height];
-//            Log.d(TAG, "growing binary int-matrix buffer");
-//        }
-//
-//        if(binaryByteMatrix.length < camera_width * camera_height) {
-//            binaryByteMatrix = new byte[camera_width * camera_height];
-//            Log.d(TAG, "growing binary byte-matrix buffer");
-//        }
-//
-//        long start;
-//        long span;
-//
-//        start = SystemClock.elapsedRealtime();
-//
-//        NativeUtils.binarize(bytes, binaryByteMatrix, camera_width, camera_height);
-//
-//        span = SystemClock.elapsedRealtime() - start;
-//
-//        Log.d(TAG, "Native grayscale convert took " + span + " msec");
-//
-//        start = SystemClock.elapsedRealtime();
-//
-//        //decodeYUV420SPtoGrayscale(binaryIntMatrix, bytes, camera_width, camera_height);
-//
-//        for (int i = 0; i < camera_width * camera_height; i++) {
-//            //int value = ((bytes[i] & 0xff) < 70) ? 0 : 255;
-//            //binaryIntMatrix[i] = 0x55000000 | ((value << 16) & 0x00ff0000);
-//            binaryIntMatrix[i] = 0xFF000000 | (binaryByteMatrix[i] << 8) & 0x00ff0000;
-//        }
-//
-//        span = SystemClock.elapsedRealtime() - start;
-//
-//        Log.d(TAG, "Java grayscale convert took   " + span + " msec");
-//
-//        Bitmap bmp = Bitmap.createBitmap(binaryIntMatrix, camera_width, camera_height, Bitmap.Config.ARGB_8888);
-//        mDebugImg.setImageBitmap(bmp);
 
-        if (mHandler == null || mPaused)
+        if (scannerHandler == null || mPaused)
             return;
 
         // we grabbed a frame, send it over to the scan-decoding thread
         if (mReadyForMore) {
             mReadyForMore = false;
-            mHandler.submitDecodeJob(camera_width, camera_height, bytes);
+            scannerHandler.startDecode(new ScannerDecodeJob(previewFrameWidth, previewFrameHeight, bytes));
         }
 
-        mCamera.addCallbackBuffer(mFrameBuffer);
+        if (binaryIntMatrix.length < previewFrameWidth * previewFrameHeight) {
+            binaryIntMatrix = new int[previewFrameWidth * previewFrameHeight];
+            Log.d(TAG, "growing binary int-matrix buffer");
+        }
+
+        NativeUtils.binarizeToIntBuffer(bytes, binaryIntMatrix, previewFrameWidth, previewFrameHeight);
+
+        Bitmap bmp = Bitmap.createBitmap(binaryIntMatrix, previewFrameWidth, previewFrameHeight, Bitmap.Config.ARGB_8888);
+        mDebugImg.setImageBitmap(bmp);
+
+        mCamera.addCallbackBuffer(previewBufferOne);
     }
 
-    public void requestFrame() {
-        mLastFrame = SystemClock.elapsedRealtime();
-        //Log.d(TAG, "Frame-request delta: " + time_since_last_frame + " ms");
-        mReadyForMore = true;
+    @Override
+    public void onCompletion(MediaPlayer mp) {
+        mp.seekTo(0);
     }
 
     // called  by ScanActivity's Handler
     // with data from the decoding thread
-    public void onQRCodeDecoded(Result rawResult) {
-        if (rawResult != null) {
+    // re-entry point for queued up messages from decoder thread
+    public void onQRCodeDecoded(ScannerDecodeJob job) {
+
+        if (job.result != null) {
 //            if (mBeepLoaded)
 //                mSoundPool.play(mBeepSoundId, 0.9f, 0.9f, 1, 0, 1f);
 
-            ResultPoint[] pts = rawResult.getResultPoints();
+            ResultPoint[] pts = job.result.getResultPoints();
 
-            Point pt = new Point();
-            //pt.x = (int) (pts[0].getX() + pts[1].getX() + pts[2].getX()) / 3;
-            //pt.y = (int) (pts[0].getY() + pts[1].getY() + pts[2].getY()) / 3;
-
-            pt.x = (int) pts[0].getX();
-            pt.y = (int) pts[0].getY();
+            Point newPts[] = new Point[pts.length];
+            for(int i = 0; i < pts.length; i++) {
+                newPts[i] = new Point((int) ((pts[i].getX() * visualizationScaleX)), (int)(pts[i].getY() * visualizationScaleY));
+            }
 
             DebugVizHandler handler = mDebugViz.getHandler();
             if (handler != null) {
-                Message msg = Message.obtain(mDebugViz.getHandler(), R.id.submit_viz, pt);
-                msg.sendToTarget();
+                Message
+                        .obtain(mDebugViz.getHandler(), R.id.visualizationNewData, newPts)
+                        .sendToTarget();
             }
 
             mDetectCount++;
@@ -525,10 +385,5 @@ public class ScanActivity extends Activity implements SurfaceHolder.Callback, Ca
         }
 
         mReadyForMore = true;
-    }
-
-    @Override
-    public void onCompletion(MediaPlayer mp) {
-        mp.seekTo(0);
     }
 }
